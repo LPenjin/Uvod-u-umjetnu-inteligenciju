@@ -5,17 +5,19 @@ import heapq
 def bfs(state_space):
     start, goal, ss_dict = parse_space_state(state_space)
     visited = {}
+    state_visited = 0
     for state in list(ss_dict.keys()):
         visited[state] = False
     queue = [(start, 1)]
     visited[start] = True
     while queue:
         curr_state = queue.pop(0)
+        state_visited += 1
         if curr_state[0] in goal:
             return curr_state
         for state_tuple in ss_dict[curr_state[0]]:
             if not visited[state_tuple[0]]:
-                queue.append((state_tuple[0], curr_state[1] + 1))
+                queue.append((state_tuple[0], curr_state[1] + 1, state_visited))
                 visited[state_tuple[0]] = True
     return False
 
@@ -47,7 +49,7 @@ def ucs(start, goal, ss_dict):
 def astar(state_space, heuristic):
     start, goal, ss_dict = parse_space_state(state_space)
     h_dict = parse_heuristic(heuristic)
-    open = [(float(h_dict[start]), start, 0, [])]
+    open = [(float(h_dict[start]), start, int(h_dict[start]), 0.0)]
     open_dict = {}
     closed_dict = {}
     states_visited = 0
@@ -67,25 +69,13 @@ def astar(state_space, heuristic):
         heapq.heappush(closed, curr_state)
         closed_dict[curr_state[1]] = True
         for state_tuple in ss_dict[curr_state[1]]:
-            if open_dict[state_tuple[0]]:
-                for index in range(len(open)):
-                    if open[index][1] == state_tuple[0] and open[index][2] < int(state_tuple[1]):
-                        continue
-                    else:
-                        del (open[index])
-                        break
-            if closed_dict[state_tuple[0]]:
-                for index in range(len(closed)):
-                    if closed[index][1] == state_tuple[0] and closed[index][2] < int(state_tuple[1]):
-                        continue
-                    else:
-                        del (closed[index])
-                        break
-            curr_state_tuple = (int(state_tuple[1]) + int(h_dict[state_tuple[0]]), state_tuple[0], int(state_tuple[1]),
-                                curr_state[3].copy())
-            curr_state_tuple[3].append(curr_state[1])
+            if open_dict[state_tuple[0]] and open_dict[state_tuple[0]] <= curr_state[3] + int(state_tuple[1]) or closed_dict[state_tuple[0]]:
+                continue
+            curr_state_tuple = (curr_state[3] + int(state_tuple[1]) + int(h_dict[state_tuple[0]]), state_tuple[0],
+                                int(h_dict[state_tuple[0]]),
+                                curr_state[3] + float(state_tuple[1]))
             heapq.heappush(open, curr_state_tuple)
-            open_dict[state_tuple[0]] = True
+            open_dict[state_tuple[0]] = curr_state_tuple[3]
 
 
 def check_optimistic(state_space, heuristic):
@@ -120,7 +110,7 @@ def check_consistent(state_space, heuristic):
 
 def parse_arguments():
     """
-
+    Function for passing arguments
     """
     parser = argparse.ArgumentParser(
         description='UI labos',
@@ -189,6 +179,7 @@ def main():
             if result:
                 print(f"[FOUND_SOLUTION]: yes")
                 print(f"[PATH_LENGTH]: {result[1]}")
+                print(f"[STATES_VISITED]: {result[2]}")
             else:
                 print(f"[FOUND_SOLUTION]: no")
         else:
@@ -216,9 +207,7 @@ def main():
             if result:
                 print(f"[FOUND_SOLUTION]: yes")
                 print(f"[STATES_VISITED]: {states_visited}")
-                print(f"[PATH_LENGTH]: {result[2]}")
-                print(f"[TOTAL_COST]: {result[0]}")
-                print(f"[PATH]: {' => '.join(result[3])}")
+                print(f"[TOTAL_COST]: {result[3]}")
             else:
                 print(f"[FOUND_SOLUTION]: no")
         else:
