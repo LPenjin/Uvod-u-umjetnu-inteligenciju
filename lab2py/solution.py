@@ -95,7 +95,6 @@ def main(argv):
             print(f"[CONCLUSION]: {goal} is unknown")
     elif argv[0] == "cooking":
         data = parse_file(argv[2])
-        goals =
 
 if __name__ == "__main__":
     main(sys.argv[1:])
