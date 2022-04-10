@@ -1,69 +1,132 @@
 import sys
 
 
-def resolve(clause1, clause2):
-    deletion_letter = []
-    new_clause = []
-    letter_deleted = False
-    for letter1 in clause1:
-        for letter2 in clause2:
-            if letter1.startswith('~') and not letter2.startswith('~') and letter1[1:] == letter2:
-                deletion_letter.append(letter2)
-                deletion_letter.append(letter1)
-                letter_deleted = True
-            elif letter2.startswith('~') and not letter1.startswith('~') and letter2[1:] == letter1:
-                deletion_letter.append(letter2)
-                deletion_letter.append(letter1)
-                letter_deleted = True
-    for letter in clause1:
-        if letter not in deletion_letter:
-            new_clause.append(letter)
-    for letter in clause2:
-        if letter not in deletion_letter:
-            new_clause.append(letter)
-    return set(new_clause), letter_deleted
+def resolve(clause1, clause2, solution):
+    resolvents = []
+    for literal1 in clause1:
+        for literal2 in clause2:
+            if literal1.startswith('~') and literal1[1:] == literal2 or literal2.startswith('~') and literal2[1:] == literal1:
+                resolvent = list(clause1).copy() + list(clause2)
+                resolvent.remove(literal1)
+                resolvent.remove(literal2)
+                if resolvent:
+                    resolvents.append(set(resolvent))
+                    solution[' '.join(resolvent)] = (clause1, clause2)
+                else:
+                    resolvents.append('NIL')
+                    solution['NIL'] = (clause1, clause2)
+
+    return resolvents
 
 
-
-def resolution(clauses, goal):
-    if goal[0].startswith('~'):
-        goal[0] = goal[0][1:]
-    else:
-        goal[0] = '~' + goal[0]
-    clauses.append(goal)
-    First = True
-    new = clauses
+def resolution(clauses, goals):
+    og_nbr = len(clauses) + len(goals)
+    new = goals
+    current_clauses = clauses.copy()
+    solution = {}
+    checked = []
     while True:
-        new_clause_added = False
         new_new = []
-        for clause1, clause2 in [(clause1, clause2) for clause1 in clauses for clause2 in new]:
-            new_clause, result = resolve(clause1, clause2)
-            if result:
-                if not new_clause:
-                    return True
-                elif new_clause not in clauses:
-                    new_clause_added = True
-                    new_new.append(new_clause)
-        for clause in new:
+        for clause1 in current_clauses:
+            for clause2 in new:
+                if clause1 != clause2 and (clause1, clause2) not in checked:
+                    resolvents = resolve(clause1, clause2, solution)
+                    checked.append((clause1, clause2))
+                    if resolvents:
+                        if 'NIL' in resolvents:
+                            if solution['NIL'][0] not in clauses:
+                                clauses.append(solution['NIL'][0])
+                            elif solution['NIL'][1] not in clauses:
+                                clauses.append(solution['NIL'][1])
+                            clauses.append(set(['NIL']))
+                            queue = ['NIL']
+                            path = ['NIL']
+                            visited = {}
+                            for clause in clauses:
+                                visited[' '.join(clause)] = False
+                            while queue:
+                                node = queue.pop()
+                                if node in solution and visited[node] == False:
+                                    visited[node] = True
+                                    queue.append(" ".join(solution[node][0]))
+                                    queue.append(" ".join(solution[node][1]))
+                                    path.append(f"{clauses.index(set(node.split(' '))) + 1}. {node} ({clauses.index(solution[node][0]) + 1}, {clauses.index(solution[node][1]) + 1})")
+                            for index, clause in enumerate(clauses[:og_nbr]):
+                                print(f"{index + 1}. {' v '.join(clause)}")
+                            print("====================")
+                            path.sort()
+                            for step in path[:-1]:
+                                print(step)
+                            return True
+                        for resolvent in resolvents:
+                            if resolvent not in new_new:
+                                new_new.append(resolvent)
+        no_new_clauses = True
+        repeated_clause = []
+        for clause in new_new:
             if clause not in clauses:
-                clauses.append(clause)
-        new = new_new.copy()
-        if not new_clause_added:
+                no_new_clauses = False
+            else:
+                repeated_clause.append(clause)
+        if no_new_clauses:
             return False
+        for clause in repeated_clause:
+            new_new.remove(clause)
+        current_clauses, new_new = delete_redundant(current_clauses, new_new)
+        new_new = remove_tautology(new_new)
+        current_clauses.extend(new_new)
+        clauses.extend(new)
+        new = new_new.copy()
 
 
-def parse_goals(data):
-    goals = []
-    for line in data:
-        goals.append(line.strip().lower().split(' v '))
-    return goals
+def remove_tautology(new_new):
+    removal = []
+    for clause in new_new:
+        list_clause = list(clause)
+        for index in range(len(list_clause)):
+            list_clause[index] = list_clause[index].replace('~', '')
+        for literal in list_clause:
+            if list_clause.count(literal) > 1:
+                removal.append(clause)
+                break
+    for remove in removal:
+        new_new.remove(remove)
+    return new_new
+
+
+def delete_redundant(clauses, new_new):
+    removal = []
+    for old_clause in clauses:
+        for new_clause in new_new:
+            intersection = old_clause.intersection(new_clause)
+            if intersection == old_clause:
+                removal.append(new_clause)
+            elif intersection == new_clause:
+                removal.append(old_clause)
+    for remove in removal:
+        if remove in clauses:
+            clauses.remove(remove)
+        if remove in new_new:
+            new_new.remove(remove)
+    return clauses, new_new
+
+
+def get_goals(line):
+    line = list(line)
+    clauses = []
+    for statement in line:
+        if statement.startswith('~'):
+            clause = set([statement[1:]])
+        else:
+            clause = set(['~' + statement])
+        clauses.append(clause)
+    return clauses
 
 
 def parse_clause(data):
     clauses = []
     for line in data:
         clauses.append(set(line.strip().lower().split(' v ')))
-    clauses[-1] = list(clauses[-1])
     return clauses
 
 
@@ -87,14 +150,34 @@ def main(argv):
     if argv[0] == "resolution":
         data = parse_file(argv[1])
         clause = parse_clause(data)
-        goal = clause[-1][0]
-        result = resolution(clause[:-1], clause[-1])
+        goals = get_goals(clause[-1])
+        clause = clause[:-1]
+        result = resolution(clause, goals)
         if result:
-            print(f"[CONCLUSION]: {goal} is true")
+            print(f"[CONCLUSION]: {data[-1].strip()} is true")
         else:
-            print(f"[CONCLUSION]: {goal} is unknown")
+            print(f"[CONCLUSION]: {data[-1].strip()} is unknown")
     elif argv[0] == "cooking":
-        data = parse_file(argv[2])
+        clauses = parse_file(argv[1])
+        clauses = parse_clause(clauses)
+        cookings = parse_file(argv[2])
+        for cooking in cookings:
+            ckg = cooking.strip().lower()
+            if ckg.endswith('?'):
+                goals = get_goals(ckg[:-2].split(' v '))
+                result = resolution(clauses.copy(), goals)
+                if result:
+                    print(f"[CONCLUSION]: {ckg[:-2]} is true")
+                else:
+                    print(f"[CONCLUSION]: {ckg[:-2]} is unknown")
+            elif ckg.endswith('+'):
+                ckg = set(ckg[:-2].split(' v '))
+                clauses.append(ckg)
+            elif ckg.endswith('-'):
+                ckg = set(ckg[:-2].split(' v '))
+                clauses.remove(ckg)
+
+
 
 if __name__ == "__main__":
     main(sys.argv[1:])
