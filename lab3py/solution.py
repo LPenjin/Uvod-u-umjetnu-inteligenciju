@@ -16,6 +16,7 @@ class Node:
         self.value = value
         self.leaves = []
         self.conditions = {}
+        self.nodes_above = []
 
 class Leaf:
 
@@ -64,7 +65,7 @@ def fit(train_dataset, *depth):
         l.result = initial_label_entropies[name][index][2]
         root_node.leaves.append(l)
     curr_depth = 1
-    taken_labels = [root_node.name, CLASS_LABEL]
+    root_node.nodes_above = [CLASS_LABEL, root_node.name]
     queue = [root_node]
 
 
@@ -75,7 +76,7 @@ def fit(train_dataset, *depth):
                 continue
             label_entropies = {}
             for label in labels_count:
-                if label in taken_labels:
+                if label in node.nodes_above:
                     continue
                 label_entropies[label] = []
                 for variable in labels_count[label]:
@@ -88,13 +89,15 @@ def fit(train_dataset, *depth):
             max_ig = -math.inf
             name = NO_NAME
             for label in initial_label_entropies:
-                if label in taken_labels:
+                if label in node.nodes_above:
                     continue
                 information_gain = get_information_gain(leaf.value[0], label_entropies[label],
                                                         len(train_dataset[CLASS_LABEL]))
                 if information_gain > max_ig:
                     max_ig = information_gain
                     name = label
+            if name == NO_NAME:
+                break
             if node.depth + 1 <= depth:
                 next_node = Node(name, node.value, node.depth + 1)
                 for index, variable in enumerate(labels_count[name]):
@@ -102,7 +105,10 @@ def fit(train_dataset, *depth):
                     l.result = label_entropies[name][index][2]
                     next_node.leaves.append(l)
                 leaf.next = next_node
-                taken_labels.append(next_node.name)
+                next_node.conditions = node.conditions.copy()
+                next_node.conditions[node.name] = leaf.name
+                next_node.nodes_above = node.nodes_above.copy()
+                next_node.nodes_above.append(next_node.name)
                 queue.append(next_node)
     return root_node
 
