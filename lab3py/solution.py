@@ -190,9 +190,9 @@ def predict(test_dataset, root_node, statistically_highest):
         matrix[key] = str(matrix[key])
 
     for i in range(len(labels)):
-        beggining = i*len(labels)
+        beginning = i*len(labels)
         ending = (i+1)*len(labels)
-        print(" ".join(list(matrix.values())[beggining:ending]))
+        print(" ".join(list(matrix.values())[beginning:ending]))
 
 
 def extract_list(train_dataset, conditions):
