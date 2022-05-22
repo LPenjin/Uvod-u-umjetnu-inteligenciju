@@ -29,11 +29,14 @@ class Leaf:
 
 
 def fit(train_dataset, *depth):
+    """fits the training data to a ID3 Decision Tree"""
+
     if not depth:
         depth = math.inf
     else:
         depth = int(depth[0])
 
+    #calculates the most often occuring result
     all_results = list(set(train_dataset[CLASS_LABEL]))
     all_results.sort()
     max_count = -1
@@ -43,12 +46,12 @@ def fit(train_dataset, *depth):
             max_count = train_dataset[CLASS_LABEL].count(result)
             statistically_highest = result
 
+    #calculates initial entropy of the results
     initial_entropy = get_entropy(train_dataset[CLASS_LABEL], statistically_highest)
     labels_count = {}
     for label in train_dataset:
         count = set(train_dataset[label])
         labels_count[label] = count
-
     initial_label_entropies = {}
     for label in train_dataset:
         if label == CLASS_LABEL:
@@ -59,6 +62,7 @@ def fit(train_dataset, *depth):
             label_entropy = get_entropy(class_label_list, statistically_highest)
             initial_label_entropies[label].append(label_entropy)
 
+    #gets the node most suitable for root node
     max_ig = 0
     name = NO_NAME
     for label in initial_label_entropies:
@@ -68,7 +72,6 @@ def fit(train_dataset, *depth):
             max_ig = information_gain
             name = label
     root_node = Node(name, initial_entropy, 1)
-
     for index, variable in enumerate(labels_count[name]):
         new_leaf = Leaf(variable, initial_label_entropies[name][index])
         new_leaf.result = initial_label_entropies[name][index][2]
@@ -76,11 +79,14 @@ def fit(train_dataset, *depth):
     root_node.nodes_above = [CLASS_LABEL, root_node.name]
     queue = [root_node]
 
+    #calculates the rest of the tree
     while queue:
         node = queue.pop()
         for leaf in node.leaves:
             if leaf.value[0] == 0:
                 continue
+
+            #calculates information gain for each leaf for each unused node
             label_entropies = {}
             for label in labels_count:
                 if label in node.nodes_above:
@@ -93,6 +99,8 @@ def fit(train_dataset, *depth):
                     class_label_list = extract_list(train_dataset, conditions)
                     label_entropy = get_entropy(class_label_list, statistically_highest)
                     label_entropies[label].append(label_entropy)
+
+            #chooses the node with the highest information gain
             max_ig = -math.inf
             name = NO_NAME
             for label in initial_label_entropies:
@@ -105,6 +113,8 @@ def fit(train_dataset, *depth):
                     name = label
             if name == NO_NAME:
                 break
+
+            #checks the depth and then creates a Node object
             if node.depth + 1 <= depth:
                 next_node = Node(name, node.value, node.depth + 1)
                 for index, variable in enumerate(labels_count[name]):
@@ -121,12 +131,18 @@ def fit(train_dataset, *depth):
 
 
 def get_entropy(inputs, statistically_highest):
+    """gets entropy"""
+
+    #if number inputs is zero then it pick the most common result
     if len(inputs) == 0:
         return 1.0, len(inputs), statistically_highest
 
+    #gets all the available labels
     labels = list(set(inputs))
     labels.sort()
     helper_list = []
+
+    #finds the most common label and sets it as a result
     max_count = -math.inf
     max_label = NO_RESULT
     for label in labels:
@@ -134,6 +150,8 @@ def get_entropy(inputs, statistically_highest):
             max_count = inputs.count(label)
             max_label = label
     result = max_label
+
+    #calculates entropy for each label
     for label in labels:
         input_count = inputs.count(label)
         if input_count == 0:
@@ -146,12 +164,17 @@ def get_entropy(inputs, statistically_highest):
 
 
 def get_information_gain(d, entropies, total):
+    """gets information gain"""
+
     for entropy in entropies:
         d = d - entropy[0] * (entropy[1]/total)
     return d
 
 
 def predict(test_dataset, root_node, statistically_highest):
+    """predicts result based on the model and test dataset"""
+
+    #navigates through the tree to get to the result
     results = []
     for index in range(len(test_dataset[CLASS_LABEL])):
         queue = [root_node]
@@ -168,6 +191,8 @@ def predict(test_dataset, root_node, statistically_highest):
                     break
             if not found:
                 results.append(statistically_highest)
+
+    #calculates accuracy by comparing the test to the prediction
     print(f"[PREDICTIONS]: {' '.join(results)}")
     accuracy_sum = 0
     for index, result in enumerate(results):
@@ -175,6 +200,8 @@ def predict(test_dataset, root_node, statistically_highest):
             accuracy_sum += 1
     accuracy = accuracy_sum/len(results)
     print(f"[ACCURACY]: {accuracy:.5f}")
+
+    #calculates the confusion matrix
     print('[CONFUSION_MATRIX]:')
     labels = sorted(list(set(test_dataset[CLASS_LABEL])))
     matrix = {}
@@ -196,6 +223,8 @@ def predict(test_dataset, root_node, statistically_highest):
 
 
 def extract_list(train_dataset, conditions):
+    """Used for getting the required inputs by using conditions"""
+
     inputs = []
     for index, class_label_variable in enumerate(train_dataset[CLASS_LABEL]):
         broken = False
@@ -209,6 +238,8 @@ def extract_list(train_dataset, conditions):
 
 
 def parse_csv(filename):
+    """parses csv"""
+
     csv_list = []
     train_dataset_dict = {}
     with open(filename, newline='') as csvfile:
@@ -224,6 +255,8 @@ def parse_csv(filename):
 
 
 def show_tree(root_node):
+    """initial function for printing tree"""
+
     print("[BRANCHES]:")
     queue = [root_node]
     while queue:
@@ -232,6 +265,7 @@ def show_tree(root_node):
 
 
 def dfs(node, path, depth):
+    """dfs implementation for saving context and drawing a path"""
     for leaf in node.leaves:
         path.append(f"{depth}:{node.name}={leaf.name}")
         if leaf.next:
