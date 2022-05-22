@@ -18,6 +18,7 @@ class Node:
         self.conditions = {}
         self.nodes_above = []
 
+
 class Leaf:
 
     def __init__(self, name, value):
@@ -32,12 +33,21 @@ def fit(train_dataset, *depth):
         depth = math.inf
     else:
         depth = int(depth[0])
-    initial_entropy = get_entropy(train_dataset[CLASS_LABEL])
+
+    all_results = list(set(train_dataset[CLASS_LABEL]))
+    all_results.sort()
+    max_count = -1
+    statistically_highest = NO_RESULT
+    for result in all_results:
+        if train_dataset[CLASS_LABEL].count(result) > max_count:
+            max_count = train_dataset[CLASS_LABEL].count(result)
+            statistically_highest = result
+
+    initial_entropy = get_entropy(train_dataset[CLASS_LABEL], statistically_highest)
     labels_count = {}
     for label in train_dataset:
         count = set(train_dataset[label])
         labels_count[label] = count
-    #print(initial_entropy)
 
     initial_label_entropies = {}
     for label in train_dataset:
@@ -45,10 +55,9 @@ def fit(train_dataset, *depth):
             continue
         initial_label_entropies[label] = []
         for variable in labels_count[label]:
-            class_label_list = extract_list(train_dataset, {label:variable})
-            label_entropy = get_entropy(class_label_list)
+            class_label_list = extract_list(train_dataset, {label: variable})
+            label_entropy = get_entropy(class_label_list, statistically_highest)
             initial_label_entropies[label].append(label_entropy)
-    #print(initial_label_entropies)
 
     max_ig = 0
     name = NO_NAME
@@ -61,13 +70,11 @@ def fit(train_dataset, *depth):
     root_node = Node(name, initial_entropy, 1)
 
     for index, variable in enumerate(labels_count[name]):
-        l = Leaf(variable, initial_label_entropies[name][index])
-        l.result = initial_label_entropies[name][index][2]
-        root_node.leaves.append(l)
-    curr_depth = 1
+        new_leaf = Leaf(variable, initial_label_entropies[name][index])
+        new_leaf.result = initial_label_entropies[name][index][2]
+        root_node.leaves.append(new_leaf)
     root_node.nodes_above = [CLASS_LABEL, root_node.name]
     queue = [root_node]
-
 
     while queue:
         node = queue.pop()
@@ -84,7 +91,7 @@ def fit(train_dataset, *depth):
                     conditions[node.name] = leaf.name
                     conditions[label] = variable
                     class_label_list = extract_list(train_dataset, conditions)
-                    label_entropy = get_entropy(class_label_list)
+                    label_entropy = get_entropy(class_label_list, statistically_highest)
                     label_entropies[label].append(label_entropy)
             max_ig = -math.inf
             name = NO_NAME
@@ -101,23 +108,25 @@ def fit(train_dataset, *depth):
             if node.depth + 1 <= depth:
                 next_node = Node(name, node.value, node.depth + 1)
                 for index, variable in enumerate(labels_count[name]):
-                    l = Leaf(variable, label_entropies[name][index])
-                    l.result = label_entropies[name][index][2]
-                    next_node.leaves.append(l)
+                    new_leaf = Leaf(variable, label_entropies[name][index])
+                    new_leaf.result = label_entropies[name][index][2]
+                    next_node.leaves.append(new_leaf)
                 leaf.next = next_node
                 next_node.conditions = node.conditions.copy()
                 next_node.conditions[node.name] = leaf.name
                 next_node.nodes_above = node.nodes_above.copy()
                 next_node.nodes_above.append(next_node.name)
                 queue.append(next_node)
-    return root_node
+    return root_node, statistically_highest
 
 
-def get_entropy(inputs):
+def get_entropy(inputs, statistically_highest):
+    if len(inputs) == 0:
+        return 1.0, len(inputs), statistically_highest
+
     labels = list(set(inputs))
     labels.sort()
     helper_list = []
-    entropy = 0
     max_count = -math.inf
     max_label = NO_RESULT
     for label in labels:
@@ -136,13 +145,13 @@ def get_entropy(inputs):
     return entropy, len(inputs), result
 
 
-def get_information_gain(D, entropies, total):
+def get_information_gain(d, entropies, total):
     for entropy in entropies:
-        D = D - entropy[0] * (entropy[1]/total)
-    return D
+        d = d - entropy[0] * (entropy[1]/total)
+    return d
 
 
-def predict(test_dataset, root_node):
+def predict(test_dataset, root_node, statistically_highest):
     results = []
     for index in range(len(test_dataset[CLASS_LABEL])):
         queue = [root_node]
@@ -158,7 +167,7 @@ def predict(test_dataset, root_node):
                     found = True
                     break
             if not found:
-                results.append(test_dataset[CLASS_LABEL][-1])
+                results.append(statistically_highest)
     print(f"[PREDICTIONS]: {' '.join(results)}")
     accuracy_sum = 0
     for index, result in enumerate(results):
@@ -186,7 +195,6 @@ def predict(test_dataset, root_node):
         print(" ".join(list(matrix.values())[beggining:ending]))
 
 
-
 def extract_list(train_dataset, conditions):
     inputs = []
     for index, class_label_variable in enumerate(train_dataset[CLASS_LABEL]):
@@ -201,24 +209,23 @@ def extract_list(train_dataset, conditions):
 
 
 def parse_csv(filename):
-    l = []
+    csv_list = []
     train_dataset_dict = {}
     with open(filename, newline='') as csvfile:
         csv_reader = csv.reader(csvfile, delimiter=',')
         for row in csv_reader:
-            l.append(row)
-    l[0][-1] = CLASS_LABEL
-    for index_x, label in enumerate(l[0]):
+            csv_list.append(row)
+    csv_list[0][-1] = CLASS_LABEL
+    for index_x, label in enumerate(csv_list[0]):
         train_dataset_dict[label] = []
-        for index_y in range(1, len(l)):
-            train_dataset_dict[label].append(l[index_y][index_x])
+        for index_y in range(1, len(csv_list)):
+            train_dataset_dict[label].append(csv_list[index_y][index_x])
     return train_dataset_dict
+
 
 def show_tree(root_node):
     print("[BRANCHES]:")
     queue = [root_node]
-    depth = 1
-    path = []
     while queue:
         curr_node = queue.pop()
         dfs(curr_node, [], 1)
@@ -235,7 +242,6 @@ def dfs(node, path, depth):
             del(path[-1])
 
 
-
 def main(arguments):
     if len(arguments) < 2:
         print("Not enough arguments given")
@@ -244,12 +250,11 @@ def main(arguments):
     csv_test = parse_csv(arguments[1])
     if len(arguments) == 3:
         depth = arguments[2]
-        root_node = fit(csv_train, depth)
+        root_node, statistically_highest = fit(csv_train, depth)
     else:
-        depth = 0
-        root_node = fit(csv_train)
+        root_node, statistically_highest = fit(csv_train)
     show_tree(root_node)
-    predict(csv_test, root_node)
+    predict(csv_test, root_node, statistically_highest)
 
 
 if __name__ == '__main__':
